@@ -9,6 +9,12 @@ Brosdk SDK Python Demo
   2. 查看/选择环境列表
   3. 创建新环境
   4. 启动 / 关闭浏览器环境
+  5. 更新动态库（从 GitHub Releases 下载）
+
+特性：
+  - 记住最后一次使用的环境 ID 和 API Key（持久化到 ~/.brosdk-demo.json）
+  - 支持从 GitHub Releases 自动下载并安装最新版本动态库
+  - 下载进度条显示
 
 用法
 ----
@@ -22,10 +28,14 @@ import json
 import logging
 import os
 import platform
+import shutil
 import sys
+import tarfile
 import tempfile
 import threading
 import time
+import urllib.request
+import zipfile
 from typing import Optional
 
 # 颜色输出支持（Windows 需要额外处理）
@@ -64,6 +74,31 @@ def _ts() -> str:
     return time.strftime("%H:%M:%S")
 
 
+# ── 持久化配置（记住最后环境 ID / API Key） ────────────────────────────────
+
+_CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".brosdk-demo.json")
+
+
+def _load_config() -> dict:
+    """加载持久化配置文件。"""
+    if os.path.exists(_CONFIG_FILE):
+        try:
+            with open(_CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_config(cfg: dict) -> None:
+    """保存持久化配置文件。"""
+    try:
+        with open(_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
 # ── 默认库路径 ────────────────────────────────────────────────────────────────
 
 def _default_lib_path() -> str:
@@ -75,6 +110,173 @@ def _default_lib_path() -> str:
         return os.path.join(base, "libs", "macos-arm64", "brosdk.dylib")
     else:
         return os.path.join(base, "libs", "linux-x64", "libbrosdk.so")
+
+
+# ── Lib 更新下载 ─────────────────────────────────────────────────────────────
+
+_GITHUB_RELEASES_API = "https://api.github.com/repos/browsersdk/brosdk-sdk/releases/latest"
+
+# 平台 → asset 文件名模板（{version} 占位）
+_PLATFORM_ASSET = {
+    ("Windows",  "AMD64"): "brosdk-{version}-windows-x64.zip",
+    ("Darwin",   "ARM64"): "brosdk-{version}-darwin-arm64.tar.gz",
+    ("Darwin",   "x86_64"): "brosdk-{version}-darwin-arm64.tar.gz",
+    ("Linux",    "x86_64"): "brosdk-{version}-linux-x64.tar.gz",
+}
+
+
+def _detect_platform_asset() -> str:
+    """检测当前平台对应的 asset 文件名模板。"""
+    system = platform.system()
+    machine = platform.machine()
+    key = (system, machine)
+    if key in _PLATFORM_ASSET:
+        return _PLATFORM_ASSET[key]
+    # 回退
+    if system == "Windows":
+        return "brosdk-{version}-windows-x64.zip"
+    elif system == "Darwin":
+        return "brosdk-{version}-darwin-arm64.tar.gz"
+    return "brosdk-{version}-linux-x64.tar.gz"
+
+
+def _extract_zip(zip_path: str, dest_dir: str) -> None:
+    """解压 zip 文件到目标目录。"""
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        zf.extractall(dest_dir)
+
+
+def _extract_tar(tar_path: str, dest_dir: str) -> None:
+    """解压 tar.gz 文件到目标目录。"""
+    with tarfile.open(tar_path, "r:gz") as tf:
+        tf.extractall(dest_dir)
+
+
+def step_update_lib(lib_path_hint: str = "") -> bool:
+    """
+    从 GitHub Releases 下载最新版本的 brosdk 动态库。
+
+    :param lib_path_hint: 当前使用的 lib 路径，用于推断 libs/ 目录位置。
+    :return: 是否成功更新。
+    """
+    print()
+    print(bold("═══ 更新 brosdk 动态库 ═══"))
+
+    # 1. 获取最新版本信息
+    asset_template = _detect_platform_asset()
+    log_info("正在查询最新版本...")
+    try:
+        req = urllib.request.Request(_GITHUB_RELEASES_API)
+        req.add_header("User-Agent", "brosdk-python-demo")
+        req.add_header("Accept", "application/vnd.github+json")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            release = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        log_err(f"获取 Release 信息失败: {e}")
+        return False
+
+    tag = release.get("tag_name", "")
+    version = tag.lstrip("v")
+    log_info(f"最新版本: {tag}")
+
+    if not version:
+        log_err("无法解析版本号")
+        return False
+
+    # 2. 找到匹配当前平台的 asset
+    asset_name = asset_template.format(version=version)
+    asset_url = None
+    for a in release.get("assets", []):
+        if a.get("name", "") == asset_name:
+            asset_url = a.get("browser_download_url", "")
+            break
+
+    if not asset_url:
+        log_err(f"未找到适配当前平台的资产: {asset_name}")
+        log_info("可用资产:")
+        for a in release.get("assets", []):
+            print(f"    - {a.get('name', '')}")
+        return False
+
+    log_info(f"下载: {asset_name}")
+
+    # 3. 确定 libs/ 目录
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    libs_dir = os.path.join(project_dir, "libs")
+    os.makedirs(libs_dir, exist_ok=True)
+
+    # 4. 下载到临时文件
+    tmp_dir = tempfile.mkdtemp(prefix="brosdk-update-")
+    try:
+        tmp_file = os.path.join(tmp_dir, asset_name)
+        log_info("正在下载...")
+        try:
+            urllib.request.urlretrieve(asset_url, tmp_file, reporthook=_download_progress)
+        except Exception as e:
+            log_err(f"下载失败: {e}")
+            return False
+        print()  # 进度条后换行
+
+        # 5. 解压
+        log_info("正在解压...")
+        extract_dir = os.path.join(tmp_dir, "extract")
+        os.makedirs(extract_dir, exist_ok=True)
+
+        if asset_name.endswith(".zip"):
+            _extract_zip(tmp_file, extract_dir)
+        else:
+            _extract_tar(tmp_file, extract_dir)
+
+        # 6. 找到解压后的动态库文件并复制到 libs/ 对应子目录
+        lib_patterns = ["brosdk.dll", "brosdk.dylib", "libbrosdk.so"]
+        found_libs = []
+        for root, _dirs, files in os.walk(extract_dir):
+            for fname in files:
+                if fname in lib_patterns:
+                    found_libs.append(os.path.join(root, fname))
+
+        if not found_libs:
+            log_err("解压后未找到动态库文件")
+            return False
+
+        for lib_file in found_libs:
+            fname = os.path.basename(lib_file)
+            # 推断平台子目录
+            if fname == "brosdk.dll":
+                subdir = "windows-x64"
+            elif fname == "brosdk.dylib":
+                subdir = "macos-arm64"
+            else:
+                subdir = "linux-x64"
+            target_dir = os.path.join(libs_dir, subdir)
+            os.makedirs(target_dir, exist_ok=True)
+            target = os.path.join(target_dir, fname)
+            shutil.copy2(lib_file, target)
+            log_ok(f"已安装: {os.path.relpath(target, project_dir)}")
+
+        log_ok(f"动态库已更新到 {version}")
+        return True
+
+    except Exception as e:
+        log_err(f"更新失败: {e}")
+        return False
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _download_progress(block_num: int, block_size: int, total_size: int) -> None:
+    """下载进度回调。"""
+    if total_size <= 0:
+        return
+    downloaded = block_num * block_size
+    pct = min(downloaded * 100 // total_size, 100)
+    mb_down = downloaded / (1024 * 1024)
+    mb_total = total_size / (1024 * 1024)
+    bar_len = 30
+    filled = int(bar_len * pct / 100)
+    bar = "█" * filled + "░" * (bar_len - filled)
+    sys.stdout.write(f"\r  下载中: [{bar}] {pct}% ({mb_down:.1f}/{mb_total:.1f} MB)")
+    sys.stdout.flush()
 
 
 # ── 主演示类 ──────────────────────────────────────────────────────────────────
@@ -94,6 +296,27 @@ class BrosdkDemo:
         # 事件队列（异步回调写入，主线程打印）
         self._event_lock = threading.Lock()
         self._pending_events: list = []
+
+        # 从持久化配置恢复
+        cfg = _load_config()
+        self.last_env_id: str = cfg.get("last_env_id", "")
+        if not self.api_key:
+            self.api_key = cfg.get("api_key", "")
+
+    # ── 持久化 ────────────────────────────────────────────────────────────────
+
+    def _save_env(self, env_id: str) -> None:
+        """记住最后一次使用的环境 ID。"""
+        self.last_env_id = env_id
+        cfg = _load_config()
+        cfg["last_env_id"] = env_id
+        _save_config(cfg)
+
+    def _save_api_key(self, key: str) -> None:
+        """记住 API Key。"""
+        cfg = _load_config()
+        cfg["api_key"] = key
+        _save_config(cfg)
 
     # ── 事件处理 ──────────────────────────────────────────────────────────────
 
@@ -133,6 +356,9 @@ class BrosdkDemo:
         if not self.api_key:
             log_err("API Key 不能为空")
             return False
+
+        # 持久化 API Key
+        self._save_api_key(self.api_key)
 
         # 创建 API 客户端
         self.api_client = BrosdkApiClient(api_key=self.api_key)
@@ -344,7 +570,7 @@ class BrosdkDemo:
         config = json.dumps({
             "envs": [{
                 "envId": env_id,
-                "args":  ["--no-first-run", "--no-default-browser-check", "--client-appid=test"],
+                "args":  ["--no-first-run", "--no-default-browser-check"],
             }]
         })
         log_info(f"正在启动环境: {env_id}")
@@ -410,9 +636,11 @@ class BrosdkDemo:
         print(bold(cyan("╔══════════════════════════════════════╗")))
         print(bold(cyan("║       Brosdk SDK Python Demo         ║")))
         print(bold(cyan("╚══════════════════════════════════════╝")))
+        if self.last_env_id:
+            print(f"  {dim('上次使用的环境:')} {cyan(self.last_env_id)}")
         print()
 
-        current_env_id = ""
+        current_env_id = self.last_env_id
 
         while True:
             self._flush_events()
@@ -427,11 +655,12 @@ class BrosdkDemo:
             print(f"  {bold('4.')} 启动浏览器环境")
             print(f"  {bold('5.')} 关闭浏览器环境")
             print(f"  {bold('6.')} 查看 SDK 信息")
+            print(f"  {bold('7.')} 更新动态库 {dim('(从 GitHub Releases 下载)')}")
             print(f"  {bold('q.')} 退出")
             print()
 
             try:
-                choice = input(f"  {bold('请选择操作')} [1-6/q]: ").strip().lower()
+                choice = input(f"  {bold('请选择操作')} [1-7/q]: ").strip().lower()
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
@@ -446,16 +675,41 @@ class BrosdkDemo:
                 env_id = self.step_create_env()
                 if env_id:
                     current_env_id = env_id
+                    self._save_env(env_id)
 
             elif choice == "4":
                 if not current_env_id:
                     current_env_id = self._get_env_id()
+                else:
+                    # 有记住的环境 ID，询问是否使用
+                    print()
+                    try:
+                        ans = input(f"  使用上次环境 {cyan(current_env_id)}？{dim('[Y/n]')}: ").strip().lower()
+                    except (EOFError, KeyboardInterrupt):
+                        print()
+                        continue
+                    if ans in ("n", "no"):
+                        picked = self._get_env_id()
+                        if picked:
+                            current_env_id = picked
                 if current_env_id:
+                    self._save_env(current_env_id)
                     self.step_start_env(current_env_id)
 
             elif choice == "5":
                 if not current_env_id:
                     current_env_id = self._get_env_id()
+                else:
+                    print()
+                    try:
+                        ans = input(f"  使用上次环境 {cyan(current_env_id)}？{dim('[Y/n]')}: ").strip().lower()
+                    except (EOFError, KeyboardInterrupt):
+                        print()
+                        continue
+                    if ans in ("n", "no"):
+                        picked = self._get_env_id()
+                        if picked:
+                            current_env_id = picked
                 if current_env_id:
                     self.step_stop_env(current_env_id)
 
@@ -472,11 +726,14 @@ class BrosdkDemo:
                     except Exception as e:
                         log_err(f"获取失败: {e}")
 
+            elif choice == "7":
+                step_update_lib(self.lib_path)
+
             elif choice in ("q", "quit", "exit"):
                 break
 
             else:
-                log_warn("无效选择，请输入 1-6 或 q")
+                log_warn("无效选择，请输入 1-7 或 q")
 
         # 退出时关闭 SDK
         print()
