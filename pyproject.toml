@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "brosdk-sdk"
+version = "1.0.0"
+description = "Python bindings for the Brosdk Browser SDK"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+keywords = ["browser", "sdk", "automation", "fingerprint"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Topic :: Software Development :: Libraries",
+]
+
+dependencies = [
+    # requests 是可选依赖（REST API 客户端会自动降级到 urllib）
+]
+
+[project.optional-dependencies]
+requests = ["requests>=2.28.0"]
+dev = [
+    "requests>=2.28.0",
+    "colorama>=0.4.6",
+    "pytest>=7.0",
+    "pytest-cov",
+]
+
+[project.scripts]
+brosdk-demo = "demo:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["brosdk*"]
+
+[tool.setuptools.package-data]
+brosdk = ["py.typed"]

@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# 虚拟环境
+.venv/
+venv/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 原生库二进制（用户自行放置）
+libs/*.dll
+libs/*.dylib
+libs/*.so
+
+# 工具目录
+.workbuddy/
+
+# 根目录散落的二进制 / 压缩包
+*.dll
+*.dylib
+*.so
+*.h
+*.zip
+
