@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=61", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "brosdk-sdk"
@@ -9,6 +9,9 @@ description = "Python bindings for the Brosdk Browser SDK"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
+authors = [
+    { name = "browsersdk" },
+]
 keywords = ["browser", "sdk", "automation", "fingerprint"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -25,9 +28,12 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 
-dependencies = [
-    # requests 是可选依赖（REST API 客户端会自动降级到 urllib）
-]
+dependencies = []
+
+[project.urls]
+Homepage = "https://www.brosdk.com/"
+Repository = "https://github.com/browsersdk/brosdk-sdk-python"
+Changelog = "https://github.com/browsersdk/brosdk-sdk/releases"
 
 [project.optional-dependencies]
 requests = ["requests>=2.28.0"]

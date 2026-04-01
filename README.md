@@ -1,8 +1,23 @@
 # brosdk-sdk-python
 
+[![PyPI version](https://img.shields.io/pypi/v/brosdk-sdk)](https://pypi.org/project/brosdk-sdk/)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+
 Python 语言绑定库 + 交互式命令行 Demo。
 
 通过 `ctypes` 动态加载平台 DLL/dylib，暴露安全、符合 Python 惯用法的 API。
+
+## 安装
+
+```bash
+# 从 PyPI 安装（推荐）
+pip install brosdk-sdk
+
+# 从源码安装
+git clone https://github.com/browsersdk/brosdk-sdk-python.git
+cd brosdk-sdk-python
+pip install .
+```
 
 ## 项目结构
 
@@ -12,7 +27,8 @@ brosdk-sdk-python/
 │   ├── __init__.py      # 公共 API 导出
 │   ├── ffi.py           # 原始 C ctypes 绑定
 │   ├── manager.py       # 高级安全封装 + 事件回调
-│   └── api.py           # REST API 客户端
+│   ├── api.py           # REST API 客户端
+│   └── console.py       # Windows DLL 控制台输出修复
 ├── libs/
 │   ├── brosdk.dll       # Windows x64 原生库
 │   └── brosdk.dylib     # macOS arm64 原生库
@@ -58,11 +74,15 @@ python demo.py --verbose
 
 ### Demo 使用流程
 
-1. **选择 `1`** → 输入 API Key → 自动获取 userSig → 初始化 SDK
+1. **选择 `1`** → 输入 API Key → 自动获取 userSig → 初始化 SDK（API Key 会自动记住）
 2. **选择 `2`** → 查看环境列表（SDK 接口或 REST API）
 3. **选择 `3`** → 选择内核版本（可选代理）→ 创建新环境
-4. **选择 `4`** → 启动浏览器环境（异步，等待 SDK 事件回调）
+4. **选择 `4`** → 启动浏览器环境（有记住的环境 ID 时会询问是否复用）
 5. **选择 `5`** → 关闭浏览器环境
+6. **选择 `6`** → 查看 SDK 信息
+7. **选择 `7`** → 更新动态库（从 GitHub Releases 自动下载）
+
+> Demo 会自动记住最后一次使用的环境 ID 和 API Key，下次启动无需重复输入。
 
 ## 库使用方式
 
@@ -200,7 +220,17 @@ pytest
 
 # 构建发布包
 python -m build
+
+# 上传到 PyPI
+twine upload dist/*
 ```
+
+## 特性
+
+- **记住环境**：自动保存最后一次使用的环境 ID 和 API Key（`~/.brosdk-demo.json`）
+- **动态库更新**：一键从 GitHub Releases 下载并安装最新版本动态库
+- **跨平台**：支持 Windows（x64）、macOS（arm64）、Linux（x64）
+- **零强制依赖**：核心库无第三方依赖，requests/colorama 为可选增强
 
 ## 协议
 
