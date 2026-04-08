@@ -1,6 +1,6 @@
-# brosdk-sdk-python
+# brosdk-python
 
-[![PyPI version](https://img.shields.io/pypi/v/brosdk-sdk)](https://pypi.org/project/brosdk-sdk/)
+[![PyPI version](https://img.shields.io/pypi/v/brosdk)](https://pypi.org/project/brosdk/)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
 
 Python 语言绑定库 + 交互式命令行 Demo。
@@ -11,18 +11,18 @@ Python 语言绑定库 + 交互式命令行 Demo。
 
 ```bash
 # 从 PyPI 安装（推荐）
-pip install brosdk-sdk
+pip install brosdk
 
 # 从源码安装
-git clone https://github.com/browsersdk/brosdk-sdk-python.git
-cd brosdk-sdk-python
+git clone https://github.com/browsersdk/brosdk-python.git
+cd brosdk-python
 pip install .
 ```
 
 ## 项目结构
 
 ```
-brosdk-sdk-python/
+brosdk-python/
 ├── brosdk/
 │   ├── __init__.py      # 公共 API 导出
 │   ├── ffi.py           # 原始 C ctypes 绑定
@@ -41,7 +41,7 @@ brosdk-sdk-python/
 ## 环境要求
 
 - Python 3.8+
-- 从 [github.com/browsersdk/brosdk-sdk/releases](https://github.com/browsersdk/brosdk-sdk/releases) 下载原生库并放置到 `libs/` 目录
+- 从 [github.com/browsersdk/brosdk/releases](https://github.com/browsersdk/brosdk/releases) 下载原生库并放置到 `libs/` 目录
 
 ## 快速开始
 

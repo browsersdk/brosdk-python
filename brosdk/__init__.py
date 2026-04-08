@@ -1,5 +1,5 @@
 """
-brosdk-sdk-python
+brosdk-python
 =================
 
 Python 语言绑定库，动态加载平台 DLL/dylib 并暴露安全、符合 Python 惯用法的 API。

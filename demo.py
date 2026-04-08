@@ -114,7 +114,7 @@ def _default_lib_path() -> str:
 
 # ── Lib 更新下载 ─────────────────────────────────────────────────────────────
 
-_GITHUB_RELEASES_API = "https://api.github.com/repos/browsersdk/brosdk-sdk/releases/latest"
+_GITHUB_RELEASES_API = "https://api.github.com/repos/browsersdk/brosdk/releases/latest"
 
 # 平台 → asset 文件名模板（{version} 占位）
 _PLATFORM_ASSET = {
